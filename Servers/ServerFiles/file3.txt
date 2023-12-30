@@ -1,0 +1,3 @@
+this is file3
+hello
+hello
