@@ -3,6 +3,7 @@ import argparse
 import xmlrpc.client
 import base64
 import shutil
+import ctypes
 
 PROXY_PORT = 8888
 
@@ -11,6 +12,10 @@ def create_folder_if_not_exists(path):
         os.makedirs(path)
         print(f"floder '{path}' created")
 
+def remove_floder_if_exists(path):
+    if os.path.exists(path):
+        os.rmdir(path)
+        print(f'floder "{path}" removed')
 
 class RPCClient():
     BUFFER_SIZE = 5     # 缓存文件最大数量
@@ -67,8 +72,9 @@ class RPCClient():
         create_folder_if_not_exists(self.buffer_dir)
         create_folder_if_not_exists(self.write_dir)
         create_folder_if_not_exists(self.read_dir)
+        print('input command("exit": close client, "help" look commands format)')
         while(self.is_running):
-            user_input = input('input command("exit": close client, "help" look commands format):\n')
+            user_input = input(f'Client@{self.username}> ')
             user_input = user_input.lower()
             try:
                 command, filename = user_input.split()
@@ -76,13 +82,7 @@ class RPCClient():
                 command = user_input
             try:
                 if command == 'exit':
-                    self.is_running = False
-                    # 删除所有缓存
-                    self.deleteBuffer()
-                    # 关闭所有读文件
-                    self.closeRead()
-                    # 处理所有写文件
-                    self.uploadWrite()
+                    self.exit()
                 elif command == 'help':
                     self.help()
                 elif command == 'ls':
@@ -104,12 +104,7 @@ class RPCClient():
                 else:
                     print(f'not exists command "{command}"')
             except:
-                # 删除所有缓存
-                self.deleteBuffer()
-                # 关闭所有读文件
-                self.closeRead()
-                # 处理所有写文件
-                self.uploadWrite()
+                self.exit()
 
     def help(self):
         help_header = 'command: %s\nfunction: %s\n'
@@ -156,7 +151,6 @@ class RPCClient():
             pass
         except FileNotFoundError:
             pass
-
 
     def write(self, filename):
         if filename in self.write_files:
@@ -245,13 +239,26 @@ class RPCClient():
             print(f'upload file {f}')
             self.upload(f)
 
+    def exit(self):
+        self.is_running = False
+        # 删除所有缓存
+        self.deleteBuffer()
+        # 关闭所有读文件
+        self.closeRead()
+        # 处理所有写文件
+        self.uploadWrite()
+        # 删除buffer, read, write 目录
+        remove_floder_if_exists(self.buffer_dir)
+        remove_floder_if_exists(self.read_dir)
+        remove_floder_if_exists(self.write_dir)
+
 def main(username, password):
     current_dir = os.getcwd()
     client_dir = f'{current_dir}/Client/ClientFiles'
     user_dir = f'{client_dir}/{username}/'
     # 客户端目录
     create_folder_if_not_exists(client_dir)
-    connect = RPCClient(username, password, user_dir)
+    RPCClient(username, password, user_dir)
 
 
 if __name__ == "__main__": 
@@ -261,4 +268,7 @@ if __name__ == "__main__":
     args = vars(parser.parse_args())
     username = args['username']
     password = args['password']
+    ctypes.windll.kernel32.SetConsoleTitleW(f"Client {username}")
+    print('connect to server...')
     main(username, password)
+    input('Press any key to close window...')

@@ -3,6 +3,7 @@ from socketserver import ThreadingMixIn
 import xmlrpc.client
 import random
 import sys
+import ctypes
 from logger import Logger
 
 class ThreadXMLRPCServer(ThreadingMixIn, SimpleXMLRPCServer):
@@ -21,13 +22,13 @@ class RPCProxy():
         state, msg = self.proxy.authentication(username, password)
         if state:
             id = random.randint(0, self.proxy.getServerNum() - 1)
-            print(id)
             print(f'allocate server {id} to user {username}')
             msg = id
 
         return state, msg
     
 if __name__ == '__main__':
+    ctypes.windll.kernel32.SetConsoleTitleW("Proxy Server")
     proxy = RPCProxy()
     server = SimpleXMLRPCServer(('localhost', 8888))
     sys.stdout = Logger(f"Servers/log/proxy.log", sys.stdout)

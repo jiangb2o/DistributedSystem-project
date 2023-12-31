@@ -7,6 +7,7 @@ import threading
 import time
 import sys
 from logger import Logger
+import ctypes
 
 BASE_PORT = 25000
 CALL_MSG = '<<server id:%s\tcall function %s>>'
@@ -153,6 +154,8 @@ class MyServerThread(threading.Thread):
             pass
 
 if __name__ == '__main__':
+    # 窗口命名
+    ctypes.windll.kernel32.SetConsoleTitleW("Server")
     parser = argparse.ArgumentParser()
     parser.add_argument('--n', type=int, default=2)
     args = vars(parser.parse_args())

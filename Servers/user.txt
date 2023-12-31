@@ -1,5 +1,5 @@
 bo 123
-test test
+test 123
 admin 123
 user1 123
 user2 123
