@@ -1,2 +1,8 @@
 /test.py
-/Client/ClientFiles
+ClientFiles/
+ServerFiles/
+log/
+
+__pycache__/
+*.py[cod]
+*$py.class
