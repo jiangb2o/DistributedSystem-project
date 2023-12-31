@@ -18,6 +18,7 @@ bash client_start.sh
 ```
 or
 ```bash
+cd DistributedSystem-project-main/
 # servers
 python ./Servers/servers.py --n 3
 # proxy server
