@@ -1,6 +1,7 @@
 /test.py
 ClientFiles/
-ServerFiles/
+# test files in ServerFile/
+file*.txt
 log/
 *.log
 
