@@ -2,6 +2,7 @@
 ClientFiles/
 ServerFiles/
 log/
+*.log
 
 __pycache__/
 *.py[cod]
