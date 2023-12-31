@@ -1,14 +1,16 @@
 import os
 import argparse
-from queue import Queue
 import xmlrpc.client
 import base64
 import shutil
+
+PROXY_PORT = 8888
 
 def create_folder_if_not_exists(path):
     if not os.path.exists(path):
         os.makedirs(path)
         print(f"floder '{path}' created")
+
 
 class RPCClient():
     BUFFER_SIZE = 5     # 缓存文件最大数量
@@ -30,27 +32,23 @@ class RPCClient():
         self.buffer_dir = user_dir + 'buffer/'
         self.read_dir = user_dir + 'read/'
         self.write_dir = user_dir + 'write/'
-        self.proxy = xmlrpc.client.ServerProxy('http://localhost:25000')
+        self.proxy = xmlrpc.client.ServerProxy(f'http://localhost:8888')
         self.is_running = True
-        self.buffer_files = {}
-        self.read_files = []
-        self.write_files = []
-        self.authentication()
-        create_folder_if_not_exists(self.buffer_dir)
-        create_folder_if_not_exists(self.write_dir)
-        create_folder_if_not_exists(self.read_dir)
+        self.getServerFromProxy()
 
-    def authentication(self):
-        '''登录验证'''
-        login_msg, state = self.proxy.authentication(self.username, self.password)
-        print(login_msg)
+    def getServerFromProxy(self):
+        '''申请从代理服务器获得一个可用的服务器'''
+        state, msg = self.proxy.allocate(self.username, self.password)
         if state:
-            print('--------------------------------------------------')
-            print(f'USER: {self.username}\nLOGIN SUCCESSFULLY!\nWELCOM TO DISTRIBUTED FILE SYSTEM!')
-            print('--------------------------------------------------')
+            self.server_port = self.proxy.getBasePort() + msg
+            print('---------------------------------------------')
+            print(f'USER: {self.username}\nCONNECT TO SERVER <{msg}> SUCCESSFULLY!\nWELCOM TO DISTRIBUTED FILE SYSTEM!')
+            print('---------------------------------------------')
             # 若不存在则创建用户目录
             create_folder_if_not_exists(self.dir)
             self.run()
+        else:
+            print(msg)
 
     def getFileContent(self, path):
         with open(path, 'rb') as f:
@@ -59,7 +57,16 @@ class RPCClient():
         return file_content
 
     def run(self):
-        '''循环等待用户指令'''
+        '''连接目标服务器, 循环等待用户指令'''
+        self.proxy = xmlrpc.client.ServerProxy(f'http://localhost:{self.server_port}')
+        # 已缓存, 正在read/write 的文件
+        self.buffer_files = {}
+        self.read_files = []
+        self.write_files = []
+        # 创建文件目录
+        create_folder_if_not_exists(self.buffer_dir)
+        create_folder_if_not_exists(self.write_dir)
+        create_folder_if_not_exists(self.read_dir)
         while(self.is_running):
             user_input = input('input command("exit": close client, "help" look commands format):\n')
             user_input = user_input.lower()
@@ -191,7 +198,7 @@ class RPCClient():
             self.buffer_files[filename] = mode  # buff 文件包含状态
         # 在buffer中, 返回
         elif state and filename in list(self.buffer_files.keys()):
-            return
+            pass
         else:
             print(f'failed msg: {content}')
         return state

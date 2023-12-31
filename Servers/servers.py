@@ -1,21 +1,24 @@
 from xmlrpc.server import SimpleXMLRPCServer
-from socketserver import ThreadingMixIn
+from xmlrpc.server import SimpleXMLRPCRequestHandler
 import os
 import base64
+import argparse
+import threading
+import time
+import sys
+from logger import Logger
 
-CALL_MSG = '<<call function %s>>'
+BASE_PORT = 25000
+CALL_MSG = '<<server id:%s\tcall function %s>>'
 SERVER_DIR = os.getcwd() + '/' + 'Servers/ServerFiles/'
 # key: filename value: -1,write; 0,nolock; n>0, read
 LOCK = {}
 
-class ThreadXMLRPCServer(ThreadingMixIn, SimpleXMLRPCServer):
-    pass
-
 def serverFiles():
     return [f for f in os.listdir(SERVER_DIR) if os.path.isfile(os.path.join(SERVER_DIR, f))]
 
-def printCall(function_name):
-    print(CALL_MSG % function_name)
+def printCall(id, function_name):
+    print(CALL_MSG % (id, function_name))
 
 def getFilePath(filename):
     return os.path.join(SERVER_DIR, filename)
@@ -28,21 +31,29 @@ def getFileContent(filename):
     return file_content
 
 class RPCServer():
-    def __init__(self) -> None:
+    def __init__(self, id, server_num) -> None:
         self.users = {}
+        self.id = id
+        self.server_num = server_num
         self.loadUsers()
+
+    # 提供给代理服务器的接口
+    def getServerNum(self):
+        printCall(self.id, 'get_server_num')
+        return self.server_num
 
     def loadUsers(self):
         '''加载用户'''
-        print('users:')
+        #print('users:')
         with open(os.getcwd() + '/Servers/user.txt') as f:
             for line in f:
                 username, password = line.strip().split(' ')
-                print(f'username: {username}, password: {password}')
+                #print(f'username: {username}, password: {password}')
                 self.users[username] = password
 
     def authentication(self, username, password):
         '''验证登录用户'''
+        printCall(self.id, 'authentication')
         state = False
         if username not in list(self.users.keys()):
             msg = 'user not exists'
@@ -51,18 +62,18 @@ class RPCServer():
             state = True
         else:
             msg = 'password wrong'
-        return msg, state
+        return state, msg
 
     def ls(self):
-        printCall('ls')
+        printCall(self.id, 'ls')
         return serverFiles()
 
     def lock(self):
-        printCall('lock')
+        printCall(self.id, 'lock')
         return LOCK
 
     def createFile(self, filename):
-        printCall('createFile')
+        printCall(self.id, 'createFile')
         if filename in serverFiles():
             return 'file already exists'
         else:
@@ -72,7 +83,7 @@ class RPCServer():
             return f'file {filename} create successfully'
 
     def deleteFile(self, filename):
-        printCall('deleteFile')
+        printCall(self.id, 'deleteFile')
         if filename not in serverFiles():
             return 'file not exist'
         else:
@@ -81,7 +92,7 @@ class RPCServer():
             return f'file {filename} deleted successfully'
 
     def setLock(self, filename, mode):
-        printCall('setLock')
+        printCall(self.id, 'setLock')
         setState = False
         msg = ''
         if filename not in serverFiles():
@@ -106,7 +117,7 @@ class RPCServer():
         return setState, msg
 
     def openFile(self, filename, mode):
-        printCall('openFile')
+        printCall(self.id, 'openFile')
         state, msg = self.setLock(filename, mode)
         if state:
             file_content = getFileContent(filename)
@@ -116,23 +127,59 @@ class RPCServer():
 
     # 关闭读文件, LOCK对应值减1
     def closeFile(self, filename):
-        printCall('closeFile')
+        printCall(self.id, 'closeFile')
         LOCK[filename] -= 1
         return True
     
     # 结束写文件, LOCK设为0
     def writeFile(self, filename, content):
-        printCall('writeFile')
+        printCall(self.id, 'writeFile')
         LOCK[filename] = 0
         content = base64.b64decode(content)
         with open(getFilePath(filename), 'wb') as f:
             f.write(content)
         return True
 
+# 服务器线程, 实现ctrl+c 能够退出程序
+class MyServerThread(threading.Thread):
+    def __init__(self, server, group=None, target=None, name=None, args=(), kwargs=None, *, daemon=None) -> None:
+        super().__init__(group, target, name, args, kwargs, daemon=daemon)
+        self.server = server
+    
+    def run(self):
+        try:
+            self.server.serve_forever()
+        except KeyboardInterrupt:
+            pass
+
 if __name__ == '__main__':
-    proxy = RPCServer()
-    server = SimpleXMLRPCServer(('localhost', 25000))
-    # 注册实例
-    server.register_instance(proxy)
-    print('XML-RPC server listening on port 25000')
-    server.serve_forever()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--n', type=int, default=2)
+    args = vars(parser.parse_args())
+    server_num = args['n']
+    threads = []
+    servers = []
+
+    sys.stdout = Logger(f"Servers/log/server.log", sys.stdout)
+
+    for i in range(server_num):
+        server = SimpleXMLRPCServer(('localhost', BASE_PORT + i), requestHandler=SimpleXMLRPCRequestHandler)
+        server.register_instance(RPCServer(i, server_num))
+        print(f'XML-RPC server id={i} listening on port {BASE_PORT+i}')
+        thread = MyServerThread(server=server)
+        thread.start()
+
+        servers.append(server)
+        threads.append(thread)
+
+    try: 
+        while True:
+            time.sleep(1)
+    # 退出
+    except KeyboardInterrupt:
+        print('main thread received KeyboardInterrupt')
+        for i in range(server_num):
+            servers[i].shutdown()
+            threads[i].join()
+
+        sys.exit(0)
