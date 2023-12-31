@@ -87,6 +87,8 @@ class RPCServer():
         printCall(self.id, 'deleteFile')
         if filename not in serverFiles():
             return 'file not exist'
+        elif filename in list(LOCK.keys()) and LOCK[filename] != 0:
+            return 'file is reading/writing by others'
         else:
             file_path = getFilePath(filename)
             os.remove(file_path)
